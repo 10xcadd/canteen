@@ -309,6 +309,18 @@ a { color: var(--primary); }
   font-weight: 700;
 }
 
+.credit-banner { margin-top: 14px; }
+.credit-banner-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+
+.credit-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
 .section-heading {
   display: flex;
   align-items: center;

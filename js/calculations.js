@@ -130,12 +130,39 @@ const Calc = (() => {
     return series;
   }
 
+  // ---- Canteen credit (eat now, pay later) ----
+
+  const CREDIT_METHOD = 'Credit';
+
+  function creditExpenses(expenses) {
+    return expenses.filter(e => e.paymentMethod === CREDIT_METHOD);
+  }
+
+  function totalCreditAccrued(expenses) {
+    return creditExpenses(expenses).reduce((s, e) => s + calculateExpenseTotal(e), 0);
+  }
+
+  function totalCreditRepaid(creditPayments) {
+    return (creditPayments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  }
+
+  function outstandingCredit(expenses, creditPayments) {
+    return totalCreditAccrued(expenses) - totalCreditRepaid(creditPayments);
+  }
+
+  /** Oldest unpaid credit meal first — the ones "due longest". */
+  function creditExpensesByAge(expenses) {
+    return creditExpenses(expenses).sort((a, b) => new Date(a.date) - new Date(b.date));
+  }
+
   return {
     calculateExpenseTotal, expensesForDate, expensesForMonth, expensesForWeek,
     calculateDailyTotal, calculateWeeklyTotal, calculateMonthlyTotal,
     daysTrackedInMonth, calculateAverageDailySpend,
     calculatePaymentMethodTotal, paymentBreakdown,
     calculateItemTotal, foodBreakdown, calculateHighestSpendingDay,
-    calculateTotalItemQuantity, mostPurchasedItem, recentItemIds, dailySeriesForMonth
+    calculateTotalItemQuantity, mostPurchasedItem, recentItemIds, dailySeriesForMonth,
+    CREDIT_METHOD, creditExpenses, totalCreditAccrued, totalCreditRepaid,
+    outstandingCredit, creditExpensesByAge
   };
 })();

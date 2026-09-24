@@ -8,7 +8,8 @@ const StorageService = (() => {
     items: 'canteen_items',
     expenses: 'canteen_expenses',
     settings: 'canteen_settings',
-    paymentMethods: 'canteen_payment_methods'
+    paymentMethods: 'canteen_payment_methods',
+    creditPayments: 'canteen_credit_payments'
   };
 
   const DATA_VERSION = 1;
@@ -75,7 +76,7 @@ const StorageService = (() => {
     { name: 'Thali', price: 80, category: 'Lunch' }
   ];
 
-  const DEFAULT_PAYMENT_METHODS = ['GPay', 'Cash', 'UPI', 'Card', 'Other'];
+  const DEFAULT_PAYMENT_METHODS = ['GPay', 'Cash', 'UPI', 'Card', 'Credit', 'Other'];
 
   function defaultSettings() {
     return {
@@ -242,6 +243,59 @@ const StorageService = (() => {
     savePaymentMethods(methods);
   }
 
+  /** Existing installs (onboarded before the Credit feature existed) get
+   *  "Credit" added to their payment methods once, automatically. */
+  function ensureCreditPaymentMethod() {
+    const methods = getPaymentMethods();
+    if (methods.length === 0) return; // not onboarded yet — bootstrapDefaults will handle it
+    if (methods.some(m => m.name.trim().toLowerCase() === 'credit')) return;
+    methods.push({ id: Utils.uid('pm'), name: 'Credit', active: true });
+    savePaymentMethods(methods);
+  }
+
+  // ---- Credit payments (settling up a canteen tab paid later) ----
+
+  function getCreditPayments() {
+    return safeGet(KEYS.creditPayments, []);
+  }
+
+  function saveCreditPayments(payments) {
+    safeSet(KEYS.creditPayments, payments);
+  }
+
+  function saveCreditPayment(payment) {
+    const payments = getCreditPayments();
+    const now = new Date().toISOString();
+    const newPayment = {
+      id: payment.id || Utils.uid('credit'),
+      date: payment.date,
+      amount: Number(payment.amount),
+      method: payment.method,
+      periodFrom: payment.periodFrom || null,
+      periodTo: payment.periodTo || null,
+      note: payment.note || '',
+      createdAt: payment.createdAt || now,
+      updatedAt: now
+    };
+    payments.push(newPayment);
+    saveCreditPayments(payments);
+    return newPayment;
+  }
+
+  function updateCreditPayment(payment) {
+    const payments = getCreditPayments();
+    const idx = payments.findIndex(p => p.id === payment.id);
+    if (idx === -1) return null;
+    payments[idx] = { ...payments[idx], ...payment, updatedAt: new Date().toISOString() };
+    saveCreditPayments(payments);
+    return payments[idx];
+  }
+
+  function deleteCreditPayment(paymentId) {
+    const payments = getCreditPayments().filter(p => p.id !== paymentId);
+    saveCreditPayments(payments);
+  }
+
   // ---- First-run bootstrap ----
 
   function bootstrapDefaults() {
@@ -260,7 +314,8 @@ const StorageService = (() => {
       items: getItems(),
       expenses: getExpenses(),
       settings: getSettings(),
-      paymentMethods: getPaymentMethods()
+      paymentMethods: getPaymentMethods(),
+      creditPayments: getCreditPayments()
     };
   }
 
@@ -271,6 +326,8 @@ const StorageService = (() => {
     if (!Array.isArray(payload.expenses)) return 'Backup is missing expenses.';
     if (!Array.isArray(payload.paymentMethods)) return 'Backup is missing payment methods.';
     if (!payload.settings || typeof payload.settings !== 'object') return 'Backup is missing settings.';
+    // creditPayments was added after v1 backups existed — treat a missing array as "none yet", not invalid.
+    if (payload.creditPayments !== undefined && !Array.isArray(payload.creditPayments)) return 'Backup has an invalid credit payments list.';
     return null;
   }
 
@@ -282,6 +339,8 @@ const StorageService = (() => {
     saveExpenses(payload.expenses);
     safeSet(KEYS.settings, { ...defaultSettings(), ...payload.settings });
     savePaymentMethods(payload.paymentMethods);
+    saveCreditPayments(Array.isArray(payload.creditPayments) ? payload.creditPayments : []);
+    ensureCreditPaymentMethod();
     return { ok: true };
   }
 
@@ -295,7 +354,8 @@ const StorageService = (() => {
     getItems, saveItem, updateItem, deleteItem,
     getExpenses, saveExpense, updateExpense, deleteExpense,
     getSettings, saveSettings,
-    getPaymentMethods, addPaymentMethod, removePaymentMethod,
+    getPaymentMethods, addPaymentMethod, removePaymentMethod, ensureCreditPaymentMethod,
+    getCreditPayments, saveCreditPayment, updateCreditPayment, deleteCreditPayment,
     exportData, importData, validateImport, clearAllData
   };
 })();

@@ -9,6 +9,7 @@ A fast, offline-first Progressive Web App for tracking what you eat in the offic
 - **Home dashboard** — today's spend, this week, this month, average/day, and recent expenses at a glance.
 - **Add expense** — tap food items (favorites and recently-used items surface first), adjust quantity with `− / +`, pick a payment method, add an optional note, save.
 - **Price history is preserved** — every expense stores a snapshot of the price at the time it was bought, so a later price change never rewrites old expenses.
+- **Canteen credit** — when the canteen doesn't collect payment immediately (a running tab settled after 30–45 days), mark an expense's payment method as **Credit**. It's tracked separately: the Credit screen shows what's outstanding, and you record payments against it whenever you actually settle up — amount, date, how you paid, which date range it covers, and a note. Outstanding balance = everything put on Credit minus everything you've recorded as paid.
 - **History** — expenses grouped by day with running daily totals, filters (date range, payment method), and search.
 - **Analytics** — monthly total, average daily spend, highest spending day, most purchased item, payment breakdown, and food breakdown, with a month switcher.
 - **Settings** — manage canteen items (add/edit/deactivate/delete/favorite), manage payment methods, light/dark/system theme, export/import a JSON backup, and clear all data.
@@ -46,9 +47,16 @@ Each collection is stored under its own key, wrapped with a version number for f
 canteen_user              { id, name, createdAt, updatedAt }
 canteen_items              [{ id, name, price, category, active, favorite, createdAt, updatedAt }]
 canteen_expenses             [{ id, date, createdAt, items: [{ itemId, itemName, quantity, unitPrice, total }], subtotal, total, paymentMethod, note }]
-canteen_settings               { theme, lastPaymentMethod, onboarded }
+canteen_settings               { theme, lastPaymentMethod, lastBackupAt, onboarded }
 canteen_payment_methods           [{ id, name, active }]
+canteen_credit_payments            [{ id, date, amount, method, periodFrom, periodTo, note, createdAt, updatedAt }]
 ```
+
+An expense with `paymentMethod: "Credit"` is money owed to the canteen, not yet paid. A `canteen_credit_payments` entry is a real payment you made against that running tab — its `amount` isn't tied to specific expenses; it's a lump sum, since that's how canteen credit usually gets settled (e.g. "paid ₹2,400 in cash on the 5th, covering 1 Aug – 15 Aug"). The Credit screen (`#/credit`) shows:
+
+- **Outstanding balance** = sum of all Credit expenses − sum of all recorded payments
+- **Credit meals** — every expense currently on the tab
+- **Payments made** — your settle-up history, each editable/deletable (deleting a payment adds it back to the outstanding balance)
 
 Every value is wrapped as `{ version, data }`, so a future release can add a migration step without losing existing data. `storage.js` also wraps every read/write in error handling, so a corrupted value or a full storage quota never crashes the app.
 

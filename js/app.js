@@ -8,6 +8,8 @@
   }
 
   AppState.load();
+  StorageService.ensureCreditPaymentMethod();
+  AppState.state.paymentMethods = StorageService.getPaymentMethods();
   AppState.resetDraft();
   applyTheme(AppState.state.settings.theme || 'system');
 

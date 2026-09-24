@@ -138,6 +138,11 @@ function renderHome(root) {
   `;
   root.appendChild(grid);
 
+  const outstanding = Calc.outstandingCredit(state.expenses, state.creditPayments);
+  if (outstanding !== 0 || Calc.totalCreditAccrued(state.expenses) > 0) {
+    root.appendChild(creditBanner(outstanding));
+  }
+
   const heading = Utils.el('div', { class: 'section-heading' });
   heading.innerHTML = `<h2>Recent expenses</h2>`;
   const seeAll = Utils.el('a', { href: '#/history', text: 'See all' });
@@ -157,6 +162,23 @@ function renderHome(root) {
     recent.forEach(e => list.appendChild(expenseCard(e, { compact: true })));
     root.appendChild(list);
   }
+}
+
+function creditBanner(outstanding) {
+  const card = Utils.el('div', { class: 'card credit-banner' });
+  const settled = outstanding <= 0;
+  card.innerHTML = `
+    <div class="credit-banner-row">
+      <div>
+        <div class="stat-label">${settled ? 'Canteen credit' : 'You owe the canteen'}</div>
+        <div class="stat-value num" style="font-size:22px;${settled ? 'color:var(--primary);' : 'color:var(--danger);'}">${settled ? 'All settled up' : money(outstanding)}</div>
+      </div>
+    </div>
+  `;
+  const btn = Utils.el('button', { class: 'btn btn-secondary btn-sm', text: settled ? 'View credit history' : 'Settle up' });
+  btn.addEventListener('click', () => Router.navigate('/credit'));
+  card.querySelector('.credit-banner-row').appendChild(btn);
+  return card;
 }
 
 function emptyState({ title, body, actionLabel, onAction, icon = Icons.empty }) {
@@ -302,6 +324,14 @@ function renderAdd(root) {
     chipRow.appendChild(chip);
   });
   root.appendChild(chipRow);
+
+  if (draft.paymentMethod === 'Credit') {
+    const hint = Utils.el('p', {
+      class: 'credit-hint',
+      text: "This will be added to your canteen credit — settle it anytime from Credit."
+    });
+    root.appendChild(hint);
+  }
 
   // Note
   const noteField = Utils.el('div', { class: 'field', style: 'margin-top:16px;' });
@@ -546,6 +576,195 @@ function breakdownList(entries, total) {
 }
 
 /* ===========================================================
+   Credit — canteen tab paid later (weekly/monthly settle-up)
+=========================================================== */
+function renderCredit(root) {
+  const { state } = AppState;
+  root.innerHTML = '';
+
+  const accrued = Calc.totalCreditAccrued(state.expenses);
+  const repaid = Calc.totalCreditRepaid(state.creditPayments);
+  const outstanding = accrued - repaid;
+
+  const hero = Utils.el('div', { class: 'hero-card' });
+  hero.innerHTML = `
+    <div class="hero-label">${outstanding > 0 ? 'You owe the canteen' : 'Canteen credit balance'}</div>
+    <div class="hero-amount num">${money(Math.max(outstanding, 0))}</div>
+    ${outstanding < 0 ? `<div style="font-size:13px;opacity:.85;margin-top:6px;">You've overpaid by ${money(-outstanding)} — it'll carry forward.</div>` : ''}
+  `;
+  root.appendChild(hero);
+
+  const grid = Utils.el('div', { class: 'stat-grid' });
+  grid.innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total on credit</div><div class="stat-value num">${money(accrued)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total paid</div><div class="stat-value num">${money(repaid)}</div></div>
+  `;
+  root.appendChild(grid);
+
+  const payBtn = Utils.el('button', { class: 'btn btn-primary btn-full', text: '+ Record a payment', style: 'margin-top:16px;' });
+  payBtn.addEventListener('click', () => openCreditPaymentForm());
+  root.appendChild(payBtn);
+
+  // Unpaid credit meals
+  const mealsHeading = Utils.el('div', { class: 'section-heading' });
+  mealsHeading.innerHTML = `<h2>Credit meals</h2>`;
+  root.appendChild(mealsHeading);
+  const creditMeals = Calc.creditExpensesByAge(state.expenses).reverse(); // newest first for display
+  if (creditMeals.length === 0) {
+    root.appendChild(emptyState({
+      title: 'No credit meals yet',
+      body: 'When you add an expense and choose "Credit" as the payment method, it shows up here.',
+      icon: Icons.plate
+    }));
+  } else {
+    const list = Utils.el('div', {});
+    creditMeals.forEach(e => {
+      const row = Utils.el('div', { class: 'expense-card' });
+      const itemsStr = e.items.map(i => `${Utils.escapeHTML(i.itemName)} ×${i.quantity}`).join(', ');
+      row.innerHTML = `
+        <div>
+          <div class="expense-items">${itemsStr}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">${Utils.formatDateLabel(e.date)}</div>
+        </div>
+        <div class="expense-amount num">${money(Calc.calculateExpenseTotal(e))}</div>
+      `;
+      list.appendChild(row);
+    });
+    root.appendChild(list);
+  }
+
+  // Payment history
+  const payHeading = Utils.el('div', { class: 'section-heading' });
+  payHeading.innerHTML = `<h2>Payments made</h2>`;
+  root.appendChild(payHeading);
+  const payments = [...state.creditPayments].sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (payments.length === 0) {
+    root.appendChild(emptyState({
+      title: 'No payments recorded yet',
+      body: 'When you settle up with the canteen, record it here — amount, date, method and what period it covers.'
+    }));
+  } else {
+    const list = Utils.el('div', {});
+    payments.forEach(p => list.appendChild(creditPaymentCard(p)));
+    root.appendChild(list);
+  }
+}
+
+function creditPaymentCard(payment) {
+  const card = Utils.el('div', { class: 'expense-card' });
+  const period = payment.periodFrom || payment.periodTo
+    ? `Covers ${payment.periodFrom ? Utils.formatDateShort(payment.periodFrom) : '…'} – ${payment.periodTo ? Utils.formatDateShort(payment.periodTo) : '…'}`
+    : '';
+  const left = Utils.el('div', {});
+  left.innerHTML = `
+    <div class="expense-items">${Utils.formatDateLabel(payment.date)}</div>
+    <div class="expense-meta">
+      <span class="pill">${Utils.escapeHTML(payment.method)}</span>
+      ${period ? `<span style="font-size:12px;color:var(--muted)">${period}</span>` : ''}
+    </div>
+    ${payment.note ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;">${Utils.escapeHTML(payment.note)}</div>` : ''}
+  `;
+  const right = Utils.el('div', { class: 'expense-actions' });
+  right.innerHTML = `<div class="expense-amount num">${money(payment.amount)}</div>`;
+  const actionsRow = Utils.el('div', { style: 'display:flex;gap:6px;' });
+  const editBtn = Utils.el('button', { class: 'icon-btn', html: Icons.edit, 'aria-label': 'Edit payment' });
+  editBtn.addEventListener('click', () => openCreditPaymentForm(payment));
+  const delBtn = Utils.el('button', { class: 'icon-btn', html: Icons.trash, 'aria-label': 'Delete payment' });
+  delBtn.addEventListener('click', () => {
+    Modal.confirm({
+      title: 'Delete this payment?',
+      message: `${money(payment.amount)} on ${Utils.formatDateLabel(payment.date)}. This will increase your outstanding credit again.`,
+      confirmLabel: 'Delete', danger: true,
+      onConfirm: () => { AppState.removeCreditPayment(payment.id); Toast.show('Payment deleted'); Router.rerender(); }
+    });
+  });
+  actionsRow.appendChild(editBtn); actionsRow.appendChild(delBtn);
+  right.appendChild(actionsRow);
+  card.appendChild(left); card.appendChild(right);
+  return card;
+}
+
+function openCreditPaymentForm(payment = null) {
+  const { state } = AppState;
+  const wrap = Utils.el('div', {});
+
+  const amountField = Utils.el('div', { class: 'field' });
+  amountField.innerHTML = `<label>Amount paid (₹)</label>`;
+  const amountInput = Utils.el('input', { type: 'number', min: '0', step: '1', value: payment?.amount ?? '', placeholder: 'e.g. 2400' });
+  amountField.appendChild(amountInput);
+
+  const dateField = Utils.el('div', { class: 'field' });
+  dateField.innerHTML = `<label>Date paid</label>`;
+  const dateInput = Utils.el('input', { type: 'date', value: payment?.date || Utils.todayISO(), max: Utils.todayISO() });
+  dateField.appendChild(dateInput);
+
+  const methodField = Utils.el('div', { class: 'field' });
+  methodField.innerHTML = `<label>Paid via</label>`;
+  const methodChips = Utils.el('div', { class: 'chip-row' });
+  let selectedMethod = payment?.method || null;
+  state.paymentMethods.filter(m => m.active !== false && m.name !== 'Credit').forEach(m => {
+    const chip = Utils.el('button', { class: `chip${selectedMethod === m.name ? ' selected' : ''}`, text: m.name });
+    chip.addEventListener('click', () => {
+      selectedMethod = m.name;
+      methodChips.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+    });
+    methodChips.appendChild(chip);
+  });
+  methodField.appendChild(methodChips);
+
+  const periodField = Utils.el('div', { class: 'field' });
+  periodField.innerHTML = `<label>Covers period (optional)</label>`;
+  const periodRow = Utils.el('div', { style: 'display:flex;gap:8px;' });
+  const fromInput = Utils.el('input', { type: 'date', style: 'flex:1;', value: payment?.periodFrom || '' });
+  const toInput = Utils.el('input', { type: 'date', style: 'flex:1;', value: payment?.periodTo || '' });
+  periodRow.appendChild(fromInput); periodRow.appendChild(toInput);
+  periodField.appendChild(periodRow);
+
+  const noteField = Utils.el('div', { class: 'field' });
+  noteField.innerHTML = `<label>Note (optional)</label>`;
+  const noteInput = Utils.el('textarea', { placeholder: 'e.g. Settled August canteen tab' });
+  noteInput.value = payment?.note || '';
+  noteField.appendChild(noteInput);
+
+  wrap.appendChild(amountField);
+  wrap.appendChild(dateField);
+  wrap.appendChild(methodField);
+  wrap.appendChild(periodField);
+  wrap.appendChild(noteField);
+
+  const saveBtn = Utils.el('button', {
+    class: 'btn btn-primary btn-full', text: payment ? 'Save changes' : 'Record payment',
+    onclick: () => {
+      const amount = Number(amountInput.value);
+      if (!Number.isFinite(amount) || amount <= 0) { Toast.show('Enter a valid amount', 'error'); return; }
+      if (!dateInput.value) { Toast.show('Pick the date you paid', 'error'); return; }
+      if (!selectedMethod) { Toast.show('Choose how you paid', 'error'); return; }
+      if (fromInput.value && toInput.value && fromInput.value > toInput.value) {
+        Toast.show('Period "from" date must be before "to" date', 'error'); return;
+      }
+      const payload = {
+        id: payment?.id,
+        amount, date: dateInput.value, method: selectedMethod,
+        periodFrom: fromInput.value || null, periodTo: toInput.value || null,
+        note: noteInput.value.trim()
+      };
+      if (payment) {
+        AppState.editCreditPayment(payload);
+        Toast.show('Payment updated');
+      } else {
+        AppState.addCreditPayment(payload);
+        Toast.show(`Payment recorded — ${money(amount)}`);
+      }
+      Modal.close();
+      Router.rerender();
+    }
+  });
+  Modal.open({ title: payment ? 'Edit payment' : 'Record a payment', bodyNode: wrap, actions: [saveBtn], center: true });
+  amountInput.focus();
+}
+
+/* ===========================================================
    Settings
 =========================================================== */
 function renderSettings(root) {
@@ -558,6 +777,16 @@ function renderSettings(root) {
       title: state.user?.name || 'Set your name',
       sub: 'Tap to edit',
       onClick: () => openNameEdit()
+    })
+  ]));
+
+  // Canteen credit
+  const outstandingNow = Calc.outstandingCredit(state.expenses, state.creditPayments);
+  root.appendChild(settingsGroup('Canteen credit', [
+    listRow({
+      title: outstandingNow > 0 ? `${money(outstandingNow)} due` : 'All settled up',
+      sub: 'Manage credit meals, record a payment, view history',
+      onClick: () => Router.navigate('/credit')
     })
   ]));
 

@@ -7,6 +7,7 @@ const Router = (() => {
     '/add': { render: renderAdd, title: 'Add expense' },
     '/history': { render: renderHistory, title: 'History' },
     '/analytics': { render: renderAnalytics, title: 'Analytics' },
+    '/credit': { render: renderCredit, title: 'Canteen credit' },
     '/settings': { render: renderSettings, title: 'Settings' }
   };
 
