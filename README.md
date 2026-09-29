@@ -7,7 +7,7 @@ A fast, offline-first Progressive Web App for tracking what you eat in the offic
 ## Features
 
 - **Home dashboard** — today's spend, this week, this month, average/day, and recent expenses at a glance.
-- **Add expense** — tap food items (favorites and recently-used items surface first), adjust quantity with `− / +`, pick a payment method, add an optional note, save.
+- **Add expense** — tap food items (favorites and recently-used items surface first), adjust quantity with `− / +`, pick a payment method, add an optional note, save. A **"+ Custom item"** tile lets you log something not in your saved list — type the name, price and quantity on the spot, with an option to also save it to your items for next time.
 - **Price history is preserved** — every expense stores a snapshot of the price at the time it was bought, so a later price change never rewrites old expenses.
 - **Canteen credit** — when the canteen doesn't collect payment immediately (a running tab settled after 30–45 days), mark an expense's payment method as **Credit**. It's tracked separately: the Credit screen shows what's outstanding, and you record payments against it whenever you actually settle up — amount, date, how you paid, which date range it covers, and a note. Outstanding balance = everything put on Credit minus everything you've recorded as paid.
 - **History** — expenses grouped by day with running daily totals, filters (date range, payment method), and search.

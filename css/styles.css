@@ -455,6 +455,12 @@ a { color: var(--primary); }
 .food-tile .food-name { font-size: 14px; font-weight: 650; }
 .food-tile .food-price { font-size: 13px; color: var(--muted); margin-top: 4px; }
 .food-tile.in-cart { border-color: var(--primary); background: var(--primary-soft); }
+.food-tile.custom-tile {
+  border-style: dashed;
+  border-color: var(--muted);
+  background: transparent;
+}
+.food-tile.custom-tile .food-name { color: var(--primary); }
 .food-tile .food-badge {
   position: absolute; top: 8px; right: 8px;
   min-width: 20px; height: 20px; padding: 0 6px;

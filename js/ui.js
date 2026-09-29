@@ -293,6 +293,13 @@ function renderAdd(root) {
   heading.innerHTML = `<h2>${draft.items.length ? 'Add more' : 'What did you have?'}</h2>`;
   root.appendChild(heading);
 
+  const customTile = Utils.el('button', { class: 'food-tile custom-tile' });
+  customTile.innerHTML = `<div class="food-name">+ Custom item</div><div class="food-price" style="color:var(--muted);">Not in your list? Add it here</div>`;
+  customTile.addEventListener('click', () => openCustomItemForm());
+  const customWrap = Utils.el('div', { class: 'food-grid', style: 'margin-bottom:14px;' });
+  customWrap.appendChild(customTile);
+  root.appendChild(customWrap);
+
   const activeItems = state.items.filter(i => i.active !== false);
   if (activeItems.length === 0) {
     root.appendChild(emptyState({
@@ -394,6 +401,59 @@ function foodSection(label, items, draft) {
   });
   wrap.appendChild(grid);
   return wrap;
+}
+
+function openCustomItemForm() {
+  const wrap = Utils.el('div', {});
+
+  const nameField = Utils.el('div', { class: 'field' });
+  nameField.innerHTML = `<label>What did you have?</label>`;
+  const nameInput = Utils.el('input', { type: 'text', placeholder: 'e.g. Special biryani, guest lunch' });
+  nameField.appendChild(nameInput);
+
+  const priceField = Utils.el('div', { class: 'field' });
+  priceField.innerHTML = `<label>Price (₹)</label>`;
+  const priceInput = Utils.el('input', { type: 'number', min: '0', step: '1', placeholder: 'e.g. 120' });
+  priceField.appendChild(priceInput);
+
+  const qtyField = Utils.el('div', { class: 'field' });
+  qtyField.innerHTML = `<label>Quantity</label>`;
+  const qtyInput = Utils.el('input', { type: 'number', min: '1', step: '1', value: '1' });
+  qtyField.appendChild(qtyInput);
+
+  const saveToggleField = Utils.el('label', { style: 'display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft);margin-top:4px;' });
+  const saveCheckbox = Utils.el('input', { type: 'checkbox' });
+  saveToggleField.appendChild(saveCheckbox);
+  saveToggleField.appendChild(Utils.el('span', { text: 'Also save this to my canteen items, for next time' }));
+
+  wrap.appendChild(nameField);
+  wrap.appendChild(priceField);
+  wrap.appendChild(qtyField);
+  wrap.appendChild(saveToggleField);
+
+  const saveBtn = Utils.el('button', {
+    class: 'btn btn-primary btn-full', text: 'Add to order',
+    onclick: () => {
+      const name = nameInput.value.trim();
+      const price = Number(priceInput.value);
+      const qty = Math.max(1, Math.floor(Number(qtyInput.value)) || 1);
+      if (!name) { Toast.show('Enter what you had', 'error'); return; }
+      if (!Number.isFinite(price) || price < 0) { Toast.show('Enter a valid price', 'error'); return; }
+      if (saveCheckbox.checked) {
+        const newItem = AppState.addItem({ name, price, category: 'Other', active: true, favorite: false });
+        AppState.draftAddItem(newItem);
+        if (qty > 1) AppState.draftSetQuantity(newItem.id, qty);
+      } else {
+        AppState.draftAddCustomLine(name, price, qty);
+      }
+      Modal.close();
+      Toast.show(`${name} added to your order`);
+      Router.rerender();
+    }
+  });
+
+  Modal.open({ title: 'Custom item', bodyNode: wrap, actions: [saveBtn], center: true });
+  nameInput.focus();
 }
 
 /* ===========================================================

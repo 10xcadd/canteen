@@ -160,6 +160,24 @@ const AppState = (() => {
     notify();
   }
 
+  /** A one-off item not in the canteen items list (e.g. a guest meal, a
+   *  special dish only served once). Merges into an existing line if the
+   *  same name + price is already in the cart. */
+  function draftAddCustomLine(name, price, quantity = 1) {
+    const cleanName = name.trim();
+    const existing = state.draftExpense.items.find(
+      l => l.itemName.toLowerCase() === cleanName.toLowerCase() && l.unitPrice === price
+    );
+    if (existing) {
+      existing.quantity += quantity;
+    } else {
+      state.draftExpense.items.push({
+        itemId: Utils.uid('custom'), itemName: cleanName, quantity, unitPrice: price
+      });
+    }
+    notify();
+  }
+
   function draftSetQuantity(itemId, qty) {
     const line = state.draftExpense.items.find(l => l.itemId === itemId);
     if (!line) return;
@@ -215,7 +233,7 @@ const AppState = (() => {
     updateSettings,
     addPaymentMethod, removePaymentMethod,
     addCreditPayment, editCreditPayment, removeCreditPayment,
-    resetDraft, draftAddItem, draftSetQuantity, draftRemoveItem,
+    resetDraft, draftAddItem, draftAddCustomLine, draftSetQuantity, draftRemoveItem,
     draftSetPaymentMethod, draftSetNote, draftSetDate, draftLoadFromExpense,
     setCurrentMonth
   };
