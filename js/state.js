@@ -8,6 +8,7 @@ const AppState = (() => {
     expenses: [],
     paymentMethods: [],
     creditPayments: [],
+    backupLog: [],
     settings: {},
     // transient UI state, not persisted
     draftExpense: { date: null, items: [], paymentMethod: null, note: '' },
@@ -22,6 +23,7 @@ const AppState = (() => {
     state.expenses = StorageService.getExpenses();
     state.paymentMethods = StorageService.getPaymentMethods();
     state.creditPayments = StorageService.getCreditPayments();
+    state.backupLog = StorageService.getBackupLog();
     state.settings = StorageService.getSettings();
     state.ui.currentMonth = Utils.monthKey(Utils.todayISO());
     notify();
@@ -137,6 +139,14 @@ const AppState = (() => {
     notify();
   }
 
+  // ---- Backup log ----
+  function recordBackup(entry) {
+    const saved = StorageService.addBackupLogEntry(entry);
+    state.backupLog = StorageService.getBackupLog();
+    notify();
+    return saved;
+  }
+
   // ---- Draft expense (Add Expense screen working state) ----
   function resetDraft() {
     state.draftExpense = {
@@ -233,6 +243,7 @@ const AppState = (() => {
     updateSettings,
     addPaymentMethod, removePaymentMethod,
     addCreditPayment, editCreditPayment, removeCreditPayment,
+    recordBackup,
     resetDraft, draftAddItem, draftAddCustomLine, draftSetQuantity, draftRemoveItem,
     draftSetPaymentMethod, draftSetNote, draftSetDate, draftLoadFromExpense,
     setCurrentMonth

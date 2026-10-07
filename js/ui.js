@@ -914,11 +914,12 @@ function renderSettings(root) {
   root.appendChild(appearanceGroup);
 
   // Data — backup & restore (this app has no cloud sync, so this is the only way to move or protect data)
-  const lastBackup = state.settings.lastBackupAt;
+  const log = [...state.backupLog].sort((a, b) => new Date(b.at) - new Date(a.at));
+  const lastEntry = log[0];
   const backupNote = Utils.el('p', {
     style: 'font-size:12px;color:var(--muted);margin:0 0 12px;',
-    text: lastBackup
-      ? `Last backup: ${new Date(lastBackup).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+    text: lastEntry
+      ? `Last ${lastEntry.type === 'import' ? 'restore' : 'backup'}: ${Utils.formatDateTimeLabel(lastEntry.at)}`
       : 'No backup yet — back up regularly so you never lose your history.'
   });
   const exportBtn = Utils.el('button', { class: 'btn btn-primary btn-full', text: '⬇ Back up data', style: 'margin-bottom:10px;' });
@@ -943,6 +944,27 @@ function renderSettings(root) {
   });
   const dataGroup = settingsGroup('Backup & restore', [backupNote, exportBtn, importLabel, clearBtn]);
   root.appendChild(dataGroup);
+
+  // Backup history — a dated log of every file you've downloaded or restored from,
+  // so you can tell your backups apart ("canteen-backup-06-Oct-2026-1853.json").
+  if (log.length > 0) {
+    const historyRows = log.slice(0, 10).map(entry => {
+      const row = Utils.el('div', { class: 'list-row' });
+      const icon = entry.type === 'import' ? '⬆' : '⬇';
+      const label = entry.type === 'import' ? 'Restored from' : 'Backed up to';
+      const countsBits = [];
+      if (entry.expenseCount !== null) countsBits.push(`${entry.expenseCount} expenses`);
+      if (entry.itemCount !== null) countsBits.push(`${entry.itemCount} items`);
+      row.innerHTML = `
+        <div>
+          <div class="row-title">${icon} ${Utils.escapeHTML(entry.filename)}</div>
+          <div class="row-sub">${label} · ${Utils.formatDateTimeLabel(entry.at)}${countsBits.length ? ' · ' + countsBits.join(', ') : ''}</div>
+        </div>
+      `;
+      return row;
+    });
+    root.appendChild(settingsGroup('Backup history', historyRows));
+  }
 
   // About
   const about = Utils.el('div', { class: 'settings-group' });
@@ -1063,17 +1085,24 @@ function openPaymentMethodForm() {
 
 function exportDataFile() {
   const data = StorageService.exportData();
+  const filename = Utils.backupFilename();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'canteen-tracker-backup.json';
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  AppState.updateSettings({ lastBackupAt: new Date().toISOString() });
-  Toast.show('Backup saved to your downloads');
+  AppState.recordBackup({
+    type: 'export',
+    filename,
+    expenseCount: data.expenses.length,
+    itemCount: data.items.length
+  });
+  Toast.show(`Backup saved — ${filename}`);
+  Router.rerender();
 }
 
 function handleImportFile(e) {
@@ -1102,6 +1131,12 @@ function handleImportFile(e) {
       onConfirm: () => {
         const result = StorageService.importData(parsed);
         if (result.ok) {
+          StorageService.addBackupLogEntry({
+            type: 'import',
+            filename: file.name,
+            expenseCount: Array.isArray(parsed.expenses) ? parsed.expenses.length : null,
+            itemCount: Array.isArray(parsed.items) ? parsed.items.length : null
+          });
           AppState.load();
           Toast.show('Data imported successfully');
           Router.navigate('/home');

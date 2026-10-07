@@ -9,7 +9,8 @@ const StorageService = (() => {
     expenses: 'canteen_expenses',
     settings: 'canteen_settings',
     paymentMethods: 'canteen_payment_methods',
-    creditPayments: 'canteen_credit_payments'
+    creditPayments: 'canteen_credit_payments',
+    backupLog: 'canteen_backup_log'
   };
 
   const DATA_VERSION = 1;
@@ -296,6 +297,37 @@ const StorageService = (() => {
     saveCreditPayments(payments);
   }
 
+  // ---- Backup log (dated history of backups taken / restores done) ----
+
+  function getBackupLog() {
+    return safeGet(KEYS.backupLog, []);
+  }
+
+  function saveBackupLog(log) {
+    safeSet(KEYS.backupLog, log);
+  }
+
+  function addBackupLogEntry(entry) {
+    const log = getBackupLog();
+    const newEntry = {
+      id: Utils.uid('backup'),
+      type: entry.type, // 'export' or 'import'
+      filename: entry.filename,
+      at: entry.at || new Date().toISOString(),
+      expenseCount: entry.expenseCount ?? null,
+      itemCount: entry.itemCount ?? null
+    };
+    log.unshift(newEntry); // newest first
+    // keep the log itself small — it's just a history list, not the data
+    if (log.length > 50) log.length = 50;
+    saveBackupLog(log);
+    return newEntry;
+  }
+
+  function clearBackupLog() {
+    saveBackupLog([]);
+  }
+
   // ---- First-run bootstrap ----
 
   function bootstrapDefaults() {
@@ -356,6 +388,7 @@ const StorageService = (() => {
     getSettings, saveSettings,
     getPaymentMethods, addPaymentMethod, removePaymentMethod, ensureCreditPaymentMethod,
     getCreditPayments, saveCreditPayment, updateCreditPayment, deleteCreditPayment,
+    getBackupLog, addBackupLogEntry, clearBackupLog,
     exportData, importData, validateImport, clearAllData
   };
 })();

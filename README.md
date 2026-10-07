@@ -90,9 +90,11 @@ Open the deployed URL in Chrome, Edge, or Safari on desktop or mobile, and use t
 
 ## Backing up and restoring your data
 
-Because Version 1 has no cloud sync, use **Settings → Data → Export data** regularly. This downloads a `canteen-tracker-backup.json` file containing your profile, items, expenses, settings, and payment methods.
+Because Version 1 has no cloud sync, use **Settings → Backup & restore → ⬇ Back up data** regularly. This downloads a dated JSON file, e.g. `canteen-backup-06-Oct-2026-1853.json`, containing your profile, items, expenses, credit payments, settings, and payment methods — every backup gets its own filename (day-month-year-time), so taking several over time never overwrites an earlier one.
 
-To restore, use **Settings → Data → Import data** and select a backup file. You'll be asked to confirm before it replaces the data currently on the device — nothing is overwritten silently.
+To restore, use **⬆ Restore from backup** and select a backup file. You'll be asked to confirm before it replaces the data currently on the device — nothing is overwritten silently.
+
+Underneath Backup & restore, a **Backup history** list shows every backup you've taken and every restore you've done on this device, newest first, with the filename, date and time, and how many expenses/items it covered — so you can tell your backups apart at a glance.
 
 ## Limitations of local-only storage
 

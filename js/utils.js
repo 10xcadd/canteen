@@ -83,6 +83,26 @@ const Utils = (() => {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  /** "canteen-backup-06-Oct-2026-1853.json" — dated and unique enough that
+   *  repeated backups in a day never silently overwrite each other. */
+  function backupFilename(prefix = 'canteen-backup') {
+    const d = new Date();
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = d.toLocaleDateString('en-IN', { month: 'short' });
+    const year = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${prefix}-${day}-${month}-${year}-${hh}${mm}.json`;
+  }
+
+  /** "6 Oct 2026, 6:53 pm" — for showing when a backup/restore happened. */
+  function formatDateTimeLabel(iso) {
+    const d = new Date(iso);
+    const datePart = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const timePart = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+    return `${datePart}, ${timePart}`;
+  }
+
   function el(tag, attrs = {}, children = []) {
     const node = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
@@ -120,6 +140,6 @@ const Utils = (() => {
   return {
     todayISO, dateToISO, isoToDate, formatDateLabel, formatDateShort,
     monthKey, monthLabel, shiftMonth, startOfWeekISO,
-    formatINR, uid, el, clamp, debounce, escapeHTML
+    formatINR, uid, backupFilename, formatDateTimeLabel, el, clamp, debounce, escapeHTML
   };
 })();
