@@ -464,9 +464,10 @@ function renderHistory(root) {
   root.innerHTML = '';
 
   if (!state.ui.historyFilters) {
-    state.ui.historyFilters = { date: 'all', payment: 'all', food: 'all', search: '' };
+    state.ui.historyFilters = { date: 'all', from: '', to: '', payment: 'all', food: 'all', search: '' };
   }
   const filters = state.ui.historyFilters;
+  if (filters.from === undefined) { filters.from = ''; filters.to = ''; }
 
   const searchBar = Utils.el('div', { class: 'search-bar' });
   searchBar.innerHTML = Icons.search;
@@ -478,14 +479,40 @@ function renderHistory(root) {
   searchBar.appendChild(searchInput);
   root.appendChild(searchBar);
 
+  // Date presets (incl. last month) + custom from/to range
   const filterRow = Utils.el('div', { class: 'filter-row' });
-  const dateOptions = [['all', 'All dates'], ['today', 'Today'], ['yesterday', 'Yesterday'], ['week', 'This week'], ['month', 'This month']];
+  const dateOptions = [
+    ['all', 'All dates'], ['today', 'Today'], ['yesterday', 'Yesterday'],
+    ['week', 'This week'], ['month', 'This month'], ['lastmonth', 'Last month'], ['custom', 'Custom range']
+  ];
   dateOptions.forEach(([val, label]) => {
     const chip = Utils.el('button', { class: `chip${filters.date === val ? ' selected' : ''}`, text: label });
     chip.addEventListener('click', () => { filters.date = val; renderHistory(root); });
     filterRow.appendChild(chip);
   });
   root.appendChild(filterRow);
+
+  if (filters.date === 'custom') {
+    const rangeRow = Utils.el('div', { class: 'range-row' });
+    const fromField = Utils.el('div', { class: 'field' });
+    fromField.innerHTML = `<label for="hist-from">From</label>`;
+    const fromInput = Utils.el('input', { type: 'date', id: 'hist-from', value: filters.from, max: Utils.todayISO() });
+    fromField.appendChild(fromInput);
+    const toField = Utils.el('div', { class: 'field' });
+    toField.innerHTML = `<label for="hist-to">To</label>`;
+    const toInput = Utils.el('input', { type: 'date', id: 'hist-to', value: filters.to, max: Utils.todayISO() });
+    toField.appendChild(toInput);
+    const onRangeChange = () => {
+      filters.from = fromInput.value;
+      filters.to = toInput.value;
+      renderHistoryList(listRoot, filters);
+    };
+    fromInput.addEventListener('change', onRangeChange);
+    toInput.addEventListener('change', onRangeChange);
+    rangeRow.appendChild(fromField);
+    rangeRow.appendChild(toField);
+    root.appendChild(rangeRow);
+  }
 
   const paymentNames = ['all', ...state.paymentMethods.map(m => m.name)];
   const paymentRow = Utils.el('div', { class: 'filter-row' });
@@ -495,6 +522,23 @@ function renderHistory(root) {
     paymentRow.appendChild(chip);
   });
   root.appendChild(paymentRow);
+
+  // Food filter — built from what was actually bought (includes custom items)
+  const foodNames = [...new Set(state.expenses.flatMap(e => e.items.map(i => i.itemName)))]
+    .sort((a, b) => a.localeCompare(b));
+  if (filters.food !== 'all' && !foodNames.includes(filters.food)) filters.food = 'all';
+  const foodField = Utils.el('div', { class: 'field' });
+  foodField.innerHTML = `<label for="hist-food">Food item</label>`;
+  const foodSelect = Utils.el('select', { id: 'hist-food' });
+  foodSelect.appendChild(Utils.el('option', { value: 'all', text: 'All food items' }));
+  foodNames.forEach(n => {
+    const opt = Utils.el('option', { value: n, text: n });
+    if (filters.food === n) opt.selected = true;
+    foodSelect.appendChild(opt);
+  });
+  foodSelect.addEventListener('change', () => { filters.food = foodSelect.value; renderHistoryList(listRoot, filters); });
+  foodField.appendChild(foodSelect);
+  root.appendChild(foodField);
 
   const listRoot = Utils.el('div', {});
   root.appendChild(listRoot);
@@ -515,9 +559,29 @@ function renderHistoryList(listRoot, filters) {
     expenses = Calc.expensesForWeek(expenses, today);
   } else if (filters.date === 'month') {
     expenses = Calc.expensesForMonth(expenses, Utils.monthKey(today));
+  } else if (filters.date === 'lastmonth') {
+    expenses = Calc.expensesForMonth(expenses, Utils.shiftMonth(Utils.monthKey(today), -1));
+  } else if (filters.date === 'custom') {
+    // ISO dates (YYYY-MM-DD) compare correctly as strings; either end may be left open.
+    const { from, to } = filters;
+    if (from && to && from > to) {
+      listRoot.innerHTML = '';
+      listRoot.appendChild(emptyState({
+        title: 'Check your dates',
+        body: '"From" must be on or before "To".',
+        icon: Icons.search
+      }));
+      return;
+    }
+    if (from) expenses = expenses.filter(e => e.date >= from);
+    if (to) expenses = expenses.filter(e => e.date <= to);
   }
 
   if (filters.payment !== 'all') expenses = expenses.filter(e => e.paymentMethod === filters.payment);
+
+  if (filters.food && filters.food !== 'all') {
+    expenses = expenses.filter(e => e.items.some(i => i.itemName === filters.food));
+  }
 
   if (filters.search && filters.search.trim()) {
     const q = filters.search.trim().toLowerCase();
@@ -538,6 +602,23 @@ function renderHistoryList(listRoot, filters) {
     }));
     return;
   }
+
+  // Summary of exactly what the current filters show — handy for settling a month's tab.
+  // When filtering by food, count only that food's lines so the total matches the filter.
+  const foodFilter = filters.food && filters.food !== 'all' ? filters.food : null;
+  const rangeTotal = expenses.reduce((sum, e) => sum + (foodFilter
+    ? e.items.filter(i => i.itemName === foodFilter).reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+    : Calc.calculateExpenseTotal(e)), 0);
+  const daysCount = new Set(expenses.map(e => e.date)).size;
+  const summary = Utils.el('div', { class: 'card history-summary' });
+  summary.innerHTML = `
+    <div>
+      <div class="stat-label">${foodFilter ? Utils.escapeHTML(foodFilter) + ' total' : 'Total'}</div>
+      <div class="stat-value num">${money(rangeTotal)}</div>
+    </div>
+    <div class="history-summary-meta">${expenses.length} expense${expenses.length === 1 ? '' : 's'} · ${daysCount} day${daysCount === 1 ? '' : 's'}</div>
+  `;
+  listRoot.appendChild(summary);
 
   const byDate = {};
   expenses.forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e); });

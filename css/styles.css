@@ -810,3 +810,23 @@ a { color: var(--primary); }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
+
+/* History: custom date range + filtered total */
+.range-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.range-row .field { margin-bottom: 10px; min-width: 0; }
+.range-row .field input { min-width: 0; }
+
+.history-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.history-summary .stat-value { font-size: 22px; }
+.history-summary-meta { font-size: 12px; color: var(--muted); text-align: right; }

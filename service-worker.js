@@ -1,7 +1,7 @@
 /* service-worker.js — caches the app shell so Canteen Tracker works offline.
    LocalStorage (user data) is never touched here — only static files. */
 
-const CACHE_NAME = 'canteen-tracker-v3';
+const CACHE_NAME = 'canteen-tracker-v4';
 
 // Paths are resolved relative to the service worker's own scope, so this
 // works whether the app is hosted at the domain root or under a repo path
